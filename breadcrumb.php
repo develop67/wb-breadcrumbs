@@ -1,7 +1,7 @@
 <?php
 // Breadcrumb
 function get_breadcrumb_class($class = null, $theme_location) {
-    $classes = array();
+    $classes = [];
 
     if ($class !== null) {
         if (!is_array($class)) {
@@ -30,7 +30,7 @@ function get_the_breadcrumb() {
     $output = sprintf(
         '<nav role="navigation"><ol class="%s" itemscope itemtype="http://schema.org/BreadcrumbList">'
         . $item_template,
-        implode(' ', get_breadcrumb_class(array('breadcrumb', 'breadcrumb-rsaquo', 'breadcrumb-dark', 'bg-transparent', 'mb-0', 'border-0', 'px-0', 'navbar-breadcrumb'), 'top')),
+        implode(' ', get_breadcrumb_class(['breadcrumb', 'breadcrumb-rsaquo'], 'top')),
         esc_url(home_url('/')),
         _('Home'),
         1
@@ -53,22 +53,22 @@ function get_the_breadcrumb() {
 
         $posts_page = get_posts_page();
         if ($posts_page && !is_page()) {
-            $position++;
-
             $output .= sprintf(
                 $item_template,
                 get_permalink($posts_page->ID),
                 esc_attr($posts_page->post_title),
-                2
+                $position
             );
+
+            $position++;
         }
 
         if (is_single()) {
             global $post;
-            $categories = wp_get_object_terms($post->ID, 'category', array('orderby' => 'parent'));
-            if ($categories) {
+            $categories = wp_get_object_terms($post->ID, 'category', ['orderby' => 'parent']);
+            if (!empty($categories)) {
                 if (count($categories) > 1) {
-                    foreach ($categories as $i => $category) {
+                    foreach ($categories as $category) {
                         $output .= sprintf(
                             $item_template,
                             esc_url(get_category_link($category->term_id)),
@@ -78,17 +78,83 @@ function get_the_breadcrumb() {
                         $position++;
                     }
                 } else {
+                    $category = $categories[0];
+                    if ($category->parent) {
+                        $parent_ids = get_ancestors($category->term_id, 'category', 'taxonomy');
+                        if (!empty($parent_ids)) {
+                            $parent_categories = get_categories([
+                                'include' => $parent_ids,
+                            ]);
+                            if (!empty($parent_categories)) {
+                                foreach ($parent_categories as $parent_category) {
+                                    $output .= sprintf(
+                                        $item_template,
+                                        esc_url(get_category_link($parent_category->term_id)),
+                                        esc_attr($parent_category->name),
+                                        $position
+                                    );
+                                    $position++;
+                                }
+                            }
+                        }
+                    }
+
                     $output .= sprintf(
                         $item_template,
-                        esc_url(get_category_link($categories[0]->term_id)),
-                        esc_attr($categories[0]->name),
+                        esc_url(get_category_link($category->term_id)),
+                        esc_attr($category->name),
                         $position
                     );
+                    $position++;
                 }
             }
         } elseif (is_page()) {
+            global $post;
+            if ($post->post_parent) {
+                $parent_ids = get_post_ancestors($post->ID);
+                if (!empty($parent_ids)) {
+                    $parent_pages = get_posts([
+                        'numberposts' => -1,
+                        'post_type'   => 'page',
+                        'include'     => $parent_ids
+                    ]);
+                    if (!empty($parent_pages)) {
+                        foreach ($parent_pages as $parent_page) {
+                            $output .= sprintf(
+                                $item_template,
+                                get_permalink($parent_page->ID),
+                                esc_attr($parent_page->post_title),
+                                $position
+                            );
+                            $position++;
+                        }
+                    }
+                    wp_reset_postdata();
+                }
+            }
+
             $output .= sprintf($active_template, get_the_title());
         } elseif (is_category()) {
+            $category = get_queried_object();
+            if ($category && $category->parent) {
+                $parent_ids = get_ancestors($category->term_id, 'category', 'taxonomy');
+                if (!empty($parent_ids)) {
+                    $parent_categories = get_categories([
+                        'include' => $parent_ids,
+                    ]);
+                    if (!empty($parent_categories)) {
+                        foreach ($parent_categories as $parent_category) {
+                            $output .= sprintf(
+                                $item_template,
+                                esc_url(get_category_link($parent_category->term_id)),
+                                esc_attr($parent_category->name),
+                                $position
+                            );
+                            $position++;
+                        }
+                    }
+                }
+            }
             $output .= sprintf($active_template, single_cat_title('', false));
         } elseif (is_tag()) {
             $output .= sprintf($active_template, single_tag_title('', false));
@@ -128,6 +194,33 @@ function get_the_breadcrumb() {
             }
         } elseif (is_search()) {
             $output .= sprintf($active_template, _('Search'));
+        } elseif (is_tax()) {
+            $term = get_queried_object();
+            if ($term && $term->parent) {
+                $taxonomy = get_taxonomy($term->taxonomy);
+                if ($taxonomy) {
+                    $parent_ids = get_ancestors($term->term_id, $term->taxonomy, 'taxonomy');
+                    if (!empty($parent_ids)) {
+                        $parent_terms = get_terms([
+                            'taxonomy' => $term->taxonomy,
+                            'include'  => $parent_ids,
+                        ]);
+                        if (!empty($parent_terms)) {
+                            foreach ($parent_terms as $parent_term) {
+                                $output .= sprintf(
+                                    $item_template,
+                                    esc_url(get_category_link($parent_term->term_id)),
+                                    esc_attr($parent_term->name),
+                                    $position
+                                );
+                                $position++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            $output .= sprintf($active_template, esc_attr($term->name));
         }
     }
 

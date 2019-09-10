@@ -1,36 +1,26 @@
 <?php
-// Breadcrumb
-function get_breadcrumb_class($class = null, $theme_location) {
-    $classes = [];
-
-    if ($class !== null) {
-        if (!is_array($class)) {
-            $class = preg_split('#\s+#', $class);
-        }
-        $classes = array_map('esc_attr', $class);
-    }
-
-    $classes = apply_filters('breadcrumb_class', $classes, $class, $theme_location);
-    return array_unique($classes);
-}
-
-function breadcrumb_class($class = null, $theme_location) {
-    echo 'class="' . implode(' ', get_breadcrumb_class($class, $theme_location)) . '"';
-}
-
-function get_the_breadcrumb() {
+function get_the_breadcrumb($theme_location = null) {
     global $post;
+
+    $item_classes = apply_filters('breadcrumb_item_class', 'breadcrumb-item', $theme_location);
+    $link_classes = apply_filters('breadcrumb_link_class', 'breadcrumb-link', $theme_location);
+
     $item_template = '
-        <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-            <a class="breadcrumb-link" itemprop="item" href="%s"><span itemprop="name">%s</span></a>
+        <li class="' . $item_classes . '" itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+            <a class="' . $link_classes . '" itemprop="item" href="%s">
+                <span itemprop="name">%s</span>
+            </a>
             <meta itemprop="position" content="%s">
         </li>
     ';
-    $active_template = '<li class="breadcrumb-item active">%s</li>';
+
+    $active_template = '<li class="' . $item_classes . ' active">%s</li>';
+
+    $classes = apply_filters('breadcrumb_class', 'breadcrumb breadcrumb-rsaquo', $theme_location);
     $output = sprintf(
         '<nav role="navigation"><ol class="%s" itemscope itemtype="http://schema.org/BreadcrumbList">'
         . $item_template,
-        implode(' ', get_breadcrumb_class(['breadcrumb', 'breadcrumb-rsaquo'], 'top')),
+        $classes, 
         esc_url(home_url('/')),
         _('Home'),
         1
@@ -226,7 +216,7 @@ function get_the_breadcrumb() {
 
     $output .= '</ol></nav>';
 
-    return $output;
+    return apply_filters('breadcrumb_html', $output, $theme_location);
 }
 
 function the_breadcrumb() {

@@ -1,4 +1,19 @@
 <?php
+/**
+ * Plugin Name:       Breadcrumbs
+ * Plugin URI:        https://github.com/tarkhov/wordpress-breadcrumbs
+ * Description:       WordPress seo breadcrumbs with schema support.
+ * Version:           0.1.0
+ * Requires at least: 5.2
+ * Requires PHP:      5.6
+ * Author:            Alexander Tarkhov
+ * Author URI:        https://github.com/tarkhov
+ * License:           GPL v2 or later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       breadcrumbs
+ * Domain Path:       /languages
+ */
+
 function get_the_breadcrumb($theme_location = null) {
     global $post;
 
@@ -18,7 +33,7 @@ function get_the_breadcrumb($theme_location = null) {
 
     $classes = apply_filters('breadcrumb_class', 'breadcrumb breadcrumb-rsaquo', $theme_location);
     $output = sprintf(
-        '<nav role="navigation"><ol class="%s" itemscope itemtype="http://schema.org/BreadcrumbList">'
+        '<ol class="%s" itemscope itemtype="http://schema.org/BreadcrumbList">'
         . $item_template,
         $classes, 
         esc_url(home_url('/')),
@@ -33,11 +48,10 @@ function get_the_breadcrumb($theme_location = null) {
         if (!$posts_page) {
             return '';
         } else {
-            $output .= sprintf(
-                $active_template,
-                esc_attr($posts_page->post_title)
-            );
+            $output .= sprintf($active_template, esc_attr($posts_page->post_title));
         }
+    } elseif (is_404()) {
+        $output .= sprintf($active_template, 404);
     } else {
         $position = 2;
 
@@ -54,11 +68,57 @@ function get_the_breadcrumb($theme_location = null) {
         }
 
         if (is_single()) {
-            global $post;
-            $categories = wp_get_object_terms($post->ID, 'category', ['orderby' => 'parent']);
-            if (!empty($categories)) {
-                if (count($categories) > 1) {
-                    foreach ($categories as $category) {
+            $taxonomy = null;
+            if (get_post_type($post) == 'post') {
+                $taxonomy = 'post';
+            } else {
+                $taxonomy_names = get_post_taxonomies();
+                if (!empty($taxonomy_names)) {
+                    foreach ($taxonomy_names as $taxonomy_name) {
+                        $tax = get_taxonomy($taxonomy_name);
+                        if ($tax && $tax->hierarchical) {
+                            $taxonomy = $tax->name;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($taxonomy !== null) {
+                $categories = wp_get_object_terms($post->ID, $taxonomy, ['orderby' => 'parent']);
+                if (!empty($categories)) {
+                    if (count($categories) > 1) {
+                        foreach ($categories as $category) {
+                            $output .= sprintf(
+                                $item_template,
+                                esc_url(get_category_link($category->term_id)),
+                                esc_attr($category->name),
+                                $position
+                            );
+                            $position++;
+                        }
+                    } else {
+                        $category = $categories[0];
+                        if ($category->parent) {
+                            $parent_ids = get_ancestors($category->term_id, $taxonomy, 'taxonomy');
+                            if (!empty($parent_ids)) {
+                                $parent_categories = get_categories([
+                                    'include' => $parent_ids,
+                                ]);
+                                if (!empty($parent_categories)) {
+                                    foreach ($parent_categories as $parent_category) {
+                                        $output .= sprintf(
+                                            $item_template,
+                                            esc_url(get_category_link($parent_category->term_id)),
+                                            esc_attr($parent_category->name),
+                                            $position
+                                        );
+                                        $position++;
+                                    }
+                                }
+                            }
+                        }
+
                         $output .= sprintf(
                             $item_template,
                             esc_url(get_category_link($category->term_id)),
@@ -67,39 +127,9 @@ function get_the_breadcrumb($theme_location = null) {
                         );
                         $position++;
                     }
-                } else {
-                    $category = $categories[0];
-                    if ($category->parent) {
-                        $parent_ids = get_ancestors($category->term_id, 'category', 'taxonomy');
-                        if (!empty($parent_ids)) {
-                            $parent_categories = get_categories([
-                                'include' => $parent_ids,
-                            ]);
-                            if (!empty($parent_categories)) {
-                                foreach ($parent_categories as $parent_category) {
-                                    $output .= sprintf(
-                                        $item_template,
-                                        esc_url(get_category_link($parent_category->term_id)),
-                                        esc_attr($parent_category->name),
-                                        $position
-                                    );
-                                    $position++;
-                                }
-                            }
-                        }
-                    }
-
-                    $output .= sprintf(
-                        $item_template,
-                        esc_url(get_category_link($category->term_id)),
-                        esc_attr($category->name),
-                        $position
-                    );
-                    $position++;
                 }
             }
         } elseif (is_page()) {
-            global $post;
             if ($post->post_parent) {
                 $parent_ids = get_post_ancestors($post->ID);
                 if (!empty($parent_ids)) {
@@ -178,33 +208,27 @@ function get_the_breadcrumb($theme_location = null) {
                 $output .= sprintf($active_template, get_query_var('day'));
             }
         } elseif (is_author()) {
-            $full_name = get_the_author_full_name();
-            if ($full_name) {
-                $output .= sprintf($active_template, $full_name);
-            }
+            $output .= sprintf($active_template, get_the_author());
         } elseif (is_search()) {
             $output .= sprintf($active_template, _('Search'));
         } elseif (is_tax()) {
             $term = get_queried_object();
             if ($term && $term->parent) {
-                $taxonomy = get_taxonomy($term->taxonomy);
-                if ($taxonomy) {
-                    $parent_ids = get_ancestors($term->term_id, $term->taxonomy, 'taxonomy');
-                    if (!empty($parent_ids)) {
-                        $parent_terms = get_terms([
-                            'taxonomy' => $term->taxonomy,
-                            'include'  => $parent_ids,
-                        ]);
-                        if (!empty($parent_terms)) {
-                            foreach ($parent_terms as $parent_term) {
-                                $output .= sprintf(
-                                    $item_template,
-                                    esc_url(get_category_link($parent_term->term_id)),
-                                    esc_attr($parent_term->name),
-                                    $position
-                                );
-                                $position++;
-                            }
+                $parent_ids = get_ancestors($term->term_id, $term->taxonomy, 'taxonomy');
+                if (!empty($parent_ids)) {
+                    $parent_terms = get_terms([
+                        'taxonomy' => $term->taxonomy,
+                        'include'  => $parent_ids,
+                    ]);
+                    if (!empty($parent_terms)) {
+                        foreach ($parent_terms as $parent_term) {
+                            $output .= sprintf(
+                                $item_template,
+                                esc_url(get_category_link($parent_term->term_id)),
+                                esc_attr($parent_term->name),
+                                $position
+                            );
+                            $position++;
                         }
                     }
                 }
@@ -214,7 +238,7 @@ function get_the_breadcrumb($theme_location = null) {
         }
     }
 
-    $output .= '</ol></nav>';
+    $output .= '</ol>';
 
     return apply_filters('breadcrumb_html', $output, $theme_location);
 }

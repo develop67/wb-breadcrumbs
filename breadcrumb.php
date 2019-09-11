@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name:       Breadcrumbs
- * Plugin URI:        https://github.com/tarkhov/wordpress-breadcrumbs
- * Description:       WordPress seo breadcrumbs with schema support.
+ * Plugin Name:       WordPress Bootstrap Breadcrumbs
+ * Plugin URI:        https://github.com/tarkhov/wb-breadcrumbs
+ * Description:       WordPress seo breadcrumbs with schema.org support based on Bootstrap framework.
  * Version:           0.1.0
  * Requires at least: 5.2
  * Requires PHP:      5.6
@@ -10,9 +10,18 @@
  * Author URI:        https://github.com/tarkhov
  * License:           GPL v2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       breadcrumbs
+ * Text Domain:       wb-breadcrumbs
  * Domain Path:       /languages
  */
+
+defined('ABSPATH') or die('No script kiddies please!');
+
+include(plugin_dir_path(__FILE__) . 'post.php');
+
+function wb_breadcrumbs_enqueue_scripts() {
+    wp_enqueue_style('wb-breadcrumbs', plugin_dir_url(__FILE__) . 'assets/css/bootstrap.min.css');
+}
+add_action('wp_enqueue_scripts', 'wb_breadcrumbs_enqueue_scripts');
 
 function get_the_breadcrumb($theme_location = null) {
     global $post;
